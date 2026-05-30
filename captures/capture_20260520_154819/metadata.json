@@ -1,0 +1,43 @@
+{
+  "timestamp": "20260520_154819",
+  "marker_dictionary": "DICT_6X6_250",
+  "marker_id": 23,
+  "marker_length_m": 0.0965,
+  "tvec_camera_marker_m": [
+    -0.007516217584645374,
+    -0.02679586918724958,
+    0.26886873237781783
+  ],
+  "marker_center_uv": [
+    302.0,
+    163.25
+  ],
+  "marker_center_depth_m": 0.2650000125868246,
+  "depth_scale_m_per_unit": 0.0010000000474974513,
+  "color_intrinsics": {
+    "width": 640,
+    "height": 480,
+    "fx": 607.146240234375,
+    "fy": 607.6243286132812,
+    "ppx": 318.3118591308594,
+    "ppy": 225.79112243652344,
+    "model": "distortion.inverse_brown_conrady",
+    "coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "files": {
+    "color": "color_bgr.png",
+    "depth_raw": "depth_raw_z16.png",
+    "depth_colormap": "depth_colormap.png",
+    "pcd_for_algorithm": "scene_camera_frame.ply",
+    "pcd_for_visualization": "scene_visualization_flipped.ply",
+    "T_camera_marker": "T_camera_marker.npy",
+    "camera_matrix": "camera_matrix.npy",
+    "dist_coeffs": "dist_coeffs.npy"
+  }
+}

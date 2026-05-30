@@ -1,0 +1,62 @@
+{
+  "perception_error_m": 0.02485301078626144,
+  "pre_grasp_pos": [
+    0.4518807592735612,
+    0.08036986022130643,
+    0.28512241444580755
+  ],
+  "grasp_pos": [
+    0.4518807592735612,
+    0.08036986022130643,
+    0.13512241444580753
+  ],
+  "lift_pos": [
+    0.4518807592735612,
+    0.08036986022130643,
+    0.28512241444580755
+  ],
+  "pre_place_pos": [
+    0.32,
+    0.28,
+    0.27
+  ],
+  "place_pos": [
+    0.32,
+    0.28,
+    0.12000000000000001
+  ],
+  "retreat_pos": [
+    0.32,
+    0.28,
+    0.3
+  ],
+  "final_cup_pos": [
+    0.29935821076400077,
+    0.31818687810005114,
+    0.049990011936535975
+  ],
+  "target_place_pos": [
+    0.32,
+    0.28,
+    0.05
+  ],
+  "place_error_xy_m": 0.04340876779973808,
+  "place_error_xyz_m": 0.043408768948830945,
+  "ee_link_index": 7,
+  "arm_joints": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "gripper_joints": [
+    9,
+    10,
+    11,
+    12
+  ],
+  "disable_robot_cup_collision_for_pipeline": true,
+  "note": "Cup is attached to EE using a fixed PyBullet constraint after closing gripper. This is an intentional simplification for pipeline testing."
+}

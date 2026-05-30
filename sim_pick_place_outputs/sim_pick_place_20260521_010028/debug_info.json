@@ -1,0 +1,61 @@
+{
+  "perception_error_m": 0.024854422712567714,
+  "pre_grasp_pos": [
+    0.4518812547576102,
+    0.08036878362576105,
+    0.2651232757044042
+  ],
+  "grasp_pos": [
+    0.4518812547576102,
+    0.08036878362576105,
+    0.18512327570440418
+  ],
+  "lift_pos": [
+    0.4518812547576102,
+    0.08036878362576105,
+    0.2651232757044042
+  ],
+  "pre_place_pos": [
+    0.32,
+    0.28,
+    0.27
+  ],
+  "place_pos": [
+    0.32,
+    0.28,
+    0.19
+  ],
+  "retreat_pos": [
+    0.32,
+    0.28,
+    0.3
+  ],
+  "final_cup_pos": [
+    0.2796623710895271,
+    0.30904563581653716,
+    0.04999035760359977
+  ],
+  "target_place_pos": [
+    0.32,
+    0.28,
+    0.05
+  ],
+  "place_error_xy_m": 0.04970687342919414,
+  "place_error_xyz_m": 0.04970687436443509,
+  "ee_link_index": 7,
+  "arm_joints": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "gripper_joints": [
+    9,
+    10,
+    11,
+    12
+  ],
+  "note": "Cup is attached to EE using a fixed PyBullet constraint after closing gripper. This is an intentional simplification for pipeline testing."
+}

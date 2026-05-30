@@ -1,0 +1,52 @@
+{
+  "description": "PyBullet dynamic calibration step2 result",
+  "camera_convention": "OpenCV/RealSense style: x right, y down, z forward",
+  "world_frame": "PyBullet world is treated as Kinova base frame",
+  "marker_size_m": 0.096,
+  "marker_position_base_m": [
+    0.3,
+    -0.15,
+    0.002
+  ],
+  "marker_yaw_deg": 0.0,
+  "cup_position_base_gt_m": [
+    0.45000667011743534,
+    0.09999442715599842,
+    0.04998846890597182
+  ],
+  "cup_position_base_est_m": [
+    0.4518807592735612,
+    0.08036986022130643,
+    0.06512241444580752
+  ],
+  "position_error_m": 0.02485301078626144,
+  "cup_pixel_uv": [
+    388,
+    206
+  ],
+  "cup_point_camera_m": [
+    0.11943759979160744,
+    -0.058367820552369595,
+    0.72810730627431
+  ],
+  "camera_eye": [
+    0.5,
+    -0.55,
+    0.45
+  ],
+  "camera_target": [
+    0.35,
+    0.0,
+    0.03
+  ],
+  "camera_up": [
+    0,
+    0,
+    1
+  ],
+  "width": 640,
+  "height": 480,
+  "fov_deg": 60.0,
+  "near": 0.01,
+  "far": 2.0
+}

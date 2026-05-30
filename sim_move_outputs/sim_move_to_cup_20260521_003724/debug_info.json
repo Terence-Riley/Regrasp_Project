@@ -1,0 +1,29 @@
+{
+  "perception_error_m": 0.02485301078626144,
+  "pre_grasp_pos": [
+    0.4518807592735612,
+    0.08036986022130643,
+    0.2151224144458075
+  ],
+  "grasp_pos": [
+    0.4518807592735612,
+    0.08036986022130643,
+    0.10512241444580753
+  ],
+  "ee_link_index": 7,
+  "movable_joints": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    9,
+    10,
+    11,
+    12
+  ],
+  "ee_pre_grasp_error_m": 0.002016623068935328,
+  "ee_grasp_error_m": 0.0017134025053114291,
+  "note": "This script only moves the end effector near the cup. It does not close the gripper yet."
+}

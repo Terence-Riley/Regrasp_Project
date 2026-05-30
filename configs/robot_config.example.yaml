@@ -1,0 +1,18 @@
+# Copy this file to configs/robot_config.yaml and adjust for your Kinova setup.
+
+kortex:
+  ip: "192.168.1.10"
+  username: "admin"
+  password: "admin"
+  port: 10000
+
+safety:
+  move_above_height_m: 0.20
+  via_z_m: 0.25
+  max_xy_jump_m: 0.40
+  min_target_z_m: 0.05
+  action_timeout_s: 60.0
+  translation_speed_m_s: 0.03
+  orientation_speed_deg_s: 10.0
+  motion_method: "trajectory"
+  max_cartesian_step_m: 0.05

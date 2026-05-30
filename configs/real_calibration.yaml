@@ -1,0 +1,11 @@
+# Copy this file to configs/real_calibration.yaml and fill in your measured value.
+#
+# Convention:
+# T_base_marker means the pose of the ArUco marker frame expressed in Kinova base frame.
+# Units are meters.
+
+T_base_marker:
+  - [-0.70710678,  0.70710678, 0.0, 0.282]
+  - [-0.70710678, -0.70710678, 0.0, -0.300]
+  - [0.0,         0.0,        1.0, -0.066]
+  - [0.0,         0.0,        0.0, 1.0]
