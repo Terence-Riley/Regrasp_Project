@@ -11,3 +11,19 @@ install/
 log/
 *.bag
 *.db3
+
+# Local calibration and robot credentials / 本地标定和机器人账号配置
+configs/robot_config.yaml
+configs/table_workspace.yaml
+configs/real_workspaces.yaml
+
+# Generated captures and debug point clouds / 采集和调试输出
+captures/
+pointclouds/
+debug_pointclouds/
+sim_captures/
+sim_move_outputs/
+sim_pick_place_outputs/
+
+# Local binary packages / 本地二进制安装包
+*.whl

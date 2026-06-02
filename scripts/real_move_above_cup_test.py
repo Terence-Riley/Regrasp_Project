@@ -28,6 +28,8 @@ if str(PROJECT_ROOT) not in sys.path:
 OFFICIAL_EXAMPLES_DIR = (
     PROJECT_ROOT / "third_party" / "Kinova-kortex2_Gen3_G3L" / "api_python" / "examples"
 )
+if not OFFICIAL_EXAMPLES_DIR.exists():
+    OFFICIAL_EXAMPLES_DIR = PROJECT_ROOT / "official_kortex_examples"
 if str(OFFICIAL_EXAMPLES_DIR) not in sys.path:
     sys.path.insert(0, str(OFFICIAL_EXAMPLES_DIR))
 

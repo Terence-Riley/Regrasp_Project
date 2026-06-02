@@ -1,0 +1,9 @@
+numpy
+opencv-contrib-python
+open3d
+pyyaml
+scipy
+pyrealsense2
+qpsolvers
+osqp
+pin-pink

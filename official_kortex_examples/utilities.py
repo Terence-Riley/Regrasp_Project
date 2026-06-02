@@ -62,10 +62,16 @@ class DeviceConnection:
 
     @staticmethod
     def create_tcp_connection(args):
-        port = args.port
-        if args.transport == "mqtt" and port == DeviceConnection.TCP_PORT:
+        transport = getattr(args, "transport", "tcp")
+        port = getattr(args, "port", DeviceConnection.TCP_PORT)
+        timeout_ms = getattr(args, "timeout_ms", 20000)
+        if transport == "mqtt" and port == DeviceConnection.TCP_PORT:
             port = DeviceConnection.MQTT_PORT
-        return DeviceConnection(args.ip, port, args.username, args.password, args.transport, args.timeout_ms)
+        return DeviceConnection(args.ip, port, args.username, args.password, transport, timeout_ms)
+
+    @staticmethod
+    def createTcpConnection(args):
+        return DeviceConnection.create_tcp_connection(args)
 
     def __enter__(self):
         print(f"Connecting to {self.ip}:{self.port} with {self.transport_type.upper()}...")

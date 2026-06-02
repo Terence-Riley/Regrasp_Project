@@ -5,6 +5,7 @@ All depth frames returned by this module are aligned to the color stream.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -87,12 +88,13 @@ def get_median_depth_m(depth_image_z16, u, v, depth_scale_m, window=7):
 class RealSenseCamera:
     """Small wrapper for color-aligned RGB-D capture."""
 
-    def __init__(self, width=WIDTH, height=HEIGHT, fps=FPS):
+    def __init__(self, width=WIDTH, height=HEIGHT, fps=FPS, stream_order="depth_first"):
         rs = _require_rs()
         self._rs = rs
         self.width = width
         self.height = height
         self.fps = fps
+        self.stream_order = stream_order
         self.pipeline = None
         self.config = None
         self.align = rs.align(rs.stream.color)
@@ -105,32 +107,76 @@ class RealSenseCamera:
     def _make_pipeline_and_config(self, fps):
         pipeline = self._rs.pipeline()
         config = self._rs.config()
-        config.enable_stream(self._rs.stream.depth, self.width, self.height, self._rs.format.z16, fps)
-        config.enable_stream(self._rs.stream.color, self.width, self.height, self._rs.format.bgr8, fps)
+        streams = {
+            "depth": (self._rs.stream.depth, self._rs.format.z16),
+            "color": (self._rs.stream.color, self._rs.format.bgr8),
+        }
+        if self.stream_order == "color_first":
+            order = ["color", "depth"]
+        elif self.stream_order == "depth_first":
+            order = ["depth", "color"]
+        elif self.stream_order == "both":
+            order = ["depth", "color"]
+        else:
+            raise ValueError(f"Unknown RealSense stream_order: {self.stream_order}")
+
+        for name in order:
+            stream, fmt = streams[name]
+            config.enable_stream(stream, self.width, self.height, fmt, fps)
         return pipeline, config
 
-    def start(self, warmup_frames=20):
+    def _hardware_reset(self):
+        context = self._rs.context()
+        devices = list(context.query_devices())
+        if not devices:
+            print("No RealSense device found for hardware reset.")
+            return
+        print("Requesting RealSense hardware reset...")
+        for device in devices:
+            device.hardware_reset()
+        time.sleep(3.0)
+
+    def start(
+        self,
+        warmup_frames=20,
+        start_attempts=1,
+        retry_delay_s=2.0,
+        hardware_reset_on_fail=False,
+    ):
         fps_candidates = []
         for fps in [self.fps, 15, 30, 6]:
             if fps not in fps_candidates:
                 fps_candidates.append(fps)
 
         last_error = None
-        for fps in fps_candidates:
-            self.pipeline, self.config = self._make_pipeline_and_config(fps)
-            try:
-                print(f"Starting RealSense {self.width}x{self.height}@{fps}...")
-                self.profile = self.pipeline.start(self.config)
-                self.fps = fps
-                break
-            except RuntimeError as exc:
-                last_error = exc
-                self.profile = None
+        attempts = max(1, int(start_attempts))
+        for attempt in range(1, attempts + 1):
+            if hardware_reset_on_fail and attempt > 1:
+                self._hardware_reset()
+
+            for fps in fps_candidates:
+                self.pipeline, self.config = self._make_pipeline_and_config(fps)
                 try:
-                    self.pipeline.stop()
-                except RuntimeError:
-                    pass
-                print(f"RealSense start failed at {fps} FPS: {exc}")
+                    print(
+                        f"Starting RealSense {self.width}x{self.height}@{fps} "
+                        f"(stream_order={self.stream_order}, attempt={attempt}/{attempts})..."
+                    )
+                    self.profile = self.pipeline.start(self.config)
+                    self.fps = fps
+                    break
+                except RuntimeError as exc:
+                    last_error = exc
+                    self.profile = None
+                    try:
+                        self.pipeline.stop()
+                    except RuntimeError:
+                        pass
+                    print(f"RealSense start failed at {fps} FPS: {exc}")
+
+            if self.profile is not None:
+                break
+            if attempt < attempts:
+                time.sleep(float(retry_delay_s))
 
         if self.profile is None:
             raise RuntimeError(f"Could not start RealSense after trying FPS {fps_candidates}") from last_error
