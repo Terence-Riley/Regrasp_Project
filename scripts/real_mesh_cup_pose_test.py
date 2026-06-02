@@ -132,6 +132,8 @@ class MeshModel:
     pcd: o3d.geometry.PointCloud
     axis_local: np.ndarray
     bbox_center_local: np.ndarray
+    bottom_center_local: np.ndarray
+    top_center_local: np.ndarray
     bottom_radius: float
     top_radius: float
     end_radius_ratio: float
@@ -251,6 +253,29 @@ def parse_args():
     parser.add_argument("--radius", type=float, default=0.01)
     parser.add_argument("--post-clean-cluster-eps", type=float, default=0.018)
     parser.add_argument("--post-clean-cluster-min-points", type=int, default=20)
+    parser.add_argument(
+        "--enable-dark-object-filter",
+        action="store_true",
+        help="Keep only dark RGB points before DBSCAN. Useful for black cups on a white table.",
+    )
+    parser.add_argument(
+        "--dark-value-max",
+        type=float,
+        default=0.38,
+        help="Maximum HSV value/brightness in [0,1] for dark-object filtering.",
+    )
+    parser.add_argument(
+        "--dark-saturation-min",
+        type=float,
+        default=0.0,
+        help="Minimum HSV saturation in [0,1] for dark-object filtering. Keep 0 for black objects.",
+    )
+    parser.add_argument(
+        "--dark-rgb-max",
+        type=float,
+        default=None,
+        help="Optional max of all RGB channels in [0,1]. If set, points with any channel above this are rejected.",
+    )
 
     parser.add_argument(
         "--pick-sort",
@@ -263,6 +288,11 @@ def parse_args():
         choices=["both", "upright", "lying"],
         default="both",
         help="Which coarse cup states to try during mesh alignment.",
+    )
+    parser.add_argument(
+        "--force-model-set",
+        default=None,
+        help="Scene-level prior. Example: big,small forces the selected clusters to contain exactly one big and one small model.",
     )
     parser.add_argument("--yaw-samples", type=int, default=12)
     parser.add_argument("--roll-samples", type=int, default=8)
@@ -283,19 +313,47 @@ def parse_args():
     parser.add_argument(
         "--extent-weight",
         type=float,
-        default=0.35,
+        default=1.2,
         help="Penalty weight for transformed mesh bbox size mismatch against the observed cluster bbox.",
+    )
+    parser.add_argument(
+        "--observed-size-prior-weight",
+        type=float,
+        default=1.4,
+        help="Strong upright-only prior using observed cluster XY extent to distinguish big/small cups.",
+    )
+    parser.add_argument(
+        "--big-observed-diameter-min",
+        type=float,
+        default=0.058,
+        help="Upright clusters with max XY extent >= this value are more likely big cups.",
+    )
+    parser.add_argument(
+        "--small-observed-diameter-max",
+        type=float,
+        default=0.055,
+        help="Upright clusters with max XY extent <= this value are more likely small cups.",
+    )
+    parser.add_argument(
+        "--big-model-name",
+        default="big",
+        help="Mesh name treated as the big cup for observed-size prior.",
+    )
+    parser.add_argument(
+        "--small-model-name",
+        default="small",
+        help="Mesh name treated as the small cup for observed-size prior.",
     )
     parser.add_argument(
         "--coverage-weight",
         type=float,
-        default=0.65,
+        default=0.9,
         help="Score weight for observed-cluster coverage. Increase this if small cups win too often.",
     )
     parser.add_argument(
         "--fitness-weight",
         type=float,
-        default=0.45,
+        default=0.4,
         help="Score weight for Open3D ICP model-to-cluster fitness.",
     )
     parser.add_argument(
@@ -309,7 +367,7 @@ def parse_args():
         action="store_true",
         help="Allow unknown state. By default the result is forced to upright_like or lying.",
     )
-    parser.set_defaults(detect_inverted_upright=True)
+    parser.set_defaults(detect_inverted_upright=False)
     parser.add_argument(
         "--detect-inverted-upright",
         dest="detect_inverted_upright",
@@ -404,13 +462,13 @@ def parse_args():
     parser.add_argument(
         "--upright-rim-prior-weight",
         type=float,
-        default=0.65,
+        default=0.0,
         help="Penalty weight for upright cup top/bottom radius-ratio mismatch.",
     )
     parser.add_argument(
         "--upright-rim-absolute-weight",
         type=float,
-        default=1.0,
+        default=0.0,
         help="Penalty weight for upright top/bottom absolute radius mismatch.",
     )
     parser.add_argument(
@@ -596,6 +654,18 @@ def estimate_model_end_radii(vertices: np.ndarray, axis_local: np.ndarray, args)
     )
 
 
+def model_end_centers(vertices: np.ndarray, axis_local: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    axis = normalize(axis_local)
+    projections = vertices @ axis
+    p_min = float(np.min(projections))
+    p_max = float(np.max(projections))
+    center = (np.min(vertices, axis=0) + np.max(vertices, axis=0)) / 2.0
+    center_projection = float(center @ axis)
+    bottom_center = center + (p_min - center_projection) * axis
+    top_center = center + (p_max - center_projection) * axis
+    return bottom_center, top_center
+
+
 def load_mesh_model(name: str, path: Path, args) -> MeshModel:
     if not path.exists():
         raise FileNotFoundError(f"Missing mesh file for {name}: {path}")
@@ -620,6 +690,7 @@ def load_mesh_model(name: str, path: Path, args) -> MeshModel:
     height_axis = float(np.max(projections) - np.min(projections))
     extent = np.ptp(vertices, axis=0)
     end_radii = estimate_model_end_radii(vertices, normalize(axis_local), args)
+    bottom_center_local, top_center_local = model_end_centers(vertices, normalize(axis_local))
 
     pcd = mesh.sample_points_uniformly(number_of_points=int(args.model_sample_points))
     if args.model_voxel_size > 0:
@@ -633,6 +704,8 @@ def load_mesh_model(name: str, path: Path, args) -> MeshModel:
         pcd=pcd,
         axis_local=normalize(axis_local),
         bbox_center_local=(np.min(vertices, axis=0) + np.max(vertices, axis=0)) / 2.0,
+        bottom_center_local=bottom_center_local,
+        top_center_local=top_center_local,
         bottom_radius=float(end_radii["bottom_radius"]),
         top_radius=float(end_radii["top_radius"]),
         end_radius_ratio=float(end_radii["end_radius_ratio"]),
@@ -777,6 +850,41 @@ def state_extent_prior_penalty(state: str, cluster_points: np.ndarray, args) -> 
     return 0.0
 
 
+def observed_size_prior_penalty(model: MeshModel, state: str, cluster_points: np.ndarray, args):
+    if state not in ("upright_like", "inverted_upright") or len(cluster_points) == 0:
+        return 0.0, None
+
+    extent_xy = np.ptp(cluster_points[:, :2], axis=0)
+    observed_diameter = float(np.max(extent_xy))
+    model_name = str(model.name)
+    big_name = str(args.big_model_name)
+    small_name = str(args.small_model_name)
+    big_min = float(args.big_observed_diameter_min)
+    small_max = float(args.small_observed_diameter_max)
+    gap = max(big_min - small_max, 1e-6)
+
+    penalty = 0.0
+    reason = "neutral"
+    if model_name == small_name and observed_diameter >= big_min:
+        penalty = 1.0 + (observed_diameter - big_min) / gap
+        reason = "large_observed_cluster_penalizes_small_model"
+    elif model_name == big_name and observed_diameter <= small_max:
+        penalty = 1.0 + (small_max - observed_diameter) / gap
+        reason = "small_observed_cluster_penalizes_big_model"
+
+    details = {
+        "observed_xy_extent": [float(v) for v in extent_xy],
+        "observed_xy_diameter": observed_diameter,
+        "penalty": float(penalty),
+        "reason": reason,
+        "big_observed_diameter_min": big_min,
+        "small_observed_diameter_max": small_max,
+        "big_model_name": big_name,
+        "small_model_name": small_name,
+    }
+    return float(penalty), details
+
+
 def axis_snap_prior_penalty(state: str, axis_base: np.ndarray, args) -> float:
     z_abs = abs(float(normalize(axis_base, BASE_Z)[2]))
     if state in ("upright_like", "inverted_upright"):
@@ -908,6 +1016,33 @@ def report_axis_direction(axis_base: np.ndarray, state: str, args) -> np.ndarray
     return axis
 
 
+def classify_signed_cup_orientation(cup_axis_signed_base: np.ndarray, args) -> str:
+    z = float(cup_axis_signed_base[2])
+    upright_threshold = float(args.upright_axis_z_threshold)
+    lying_threshold = float(args.lying_axis_z_threshold)
+    if z >= upright_threshold:
+        return "mouth_up"
+    if z <= -upright_threshold:
+        return "mouth_down"
+    if abs(z) <= lying_threshold:
+        return "lying_signed"
+    return "tilted_signed"
+
+
+def mesh_end_pose_fields(model: MeshModel, T: np.ndarray, args) -> dict:
+    R = np.asarray(T[:3, :3], dtype=np.float64)
+    t = np.asarray(T[:3, 3], dtype=np.float64)
+    bottom_center_base = t + R @ model.bottom_center_local
+    top_center_base = t + R @ model.top_center_local
+    cup_axis_signed_base = normalize(top_center_base - bottom_center_base, R @ model.axis_local)
+    return {
+        "bottom_center_base": bottom_center_base,
+        "top_center_base": top_center_base,
+        "cup_axis_signed_base": cup_axis_signed_base,
+        "signed_orientation": classify_signed_cup_orientation(cup_axis_signed_base, args),
+    }
+
+
 def point_cloud_from_points(points: np.ndarray) -> o3d.geometry.PointCloud:
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(np.asarray(points, dtype=np.float64).reshape(-1, 3))
@@ -958,6 +1093,8 @@ def score_registration(result, cluster_pcd, model: MeshModel, state: str, axis_b
             "support_gap": None,
             "support_penalty": 0.0,
             "state_extent_penalty": 0.0,
+            "observed_size_prior": None,
+            "observed_size_penalty": 0.0,
             "axis_snap_penalty": 1.0,
             "upright_rim_prior": None,
         }
@@ -983,6 +1120,7 @@ def score_registration(result, cluster_pcd, model: MeshModel, state: str, axis_b
     support_gap = support_gap_from_table(cluster_points, table_z)
     support_penalty = support_prior_penalty(support_gap, args)
     state_penalty = state_extent_prior_penalty(state, cluster_points, args)
+    observed_size_penalty, observed_size_details = observed_size_prior_penalty(model, state, cluster_points, args)
     axis_penalty = axis_snap_prior_penalty(state, axis_base, args)
     rim_prior = upright_rim_prior(model, cluster_points, T, state, args)
 
@@ -996,6 +1134,7 @@ def score_registration(result, cluster_pcd, model: MeshModel, state: str, axis_b
         - float(args.height_prior_weight) * height_penalty
         - float(args.support_prior_weight) * support_penalty
         - float(args.state_prior_weight) * state_penalty
+        - float(args.observed_size_prior_weight) * observed_size_penalty
         - float(args.axis_snap_prior_weight) * axis_penalty
         - float(args.upright_rim_prior_weight) * float(rim_prior["penalty"])
         - float(args.upright_rim_absolute_weight) * float(rim_prior.get("absolute_penalty", 0.0))
@@ -1010,6 +1149,8 @@ def score_registration(result, cluster_pcd, model: MeshModel, state: str, axis_b
         "support_gap": None if support_gap is None else float(support_gap),
         "support_penalty": float(support_penalty),
         "state_extent_penalty": float(state_penalty),
+        "observed_size_prior": observed_size_details,
+        "observed_size_penalty": float(observed_size_penalty),
         "axis_snap_penalty": float(axis_penalty),
         "upright_rim_prior": rim_prior,
     }
@@ -1022,6 +1163,7 @@ def fit_cluster_with_meshes(cluster_pcd, models: list[MeshModel], args, table_z=
         return None
 
     best = None
+    best_by_model = {}
     for model in models:
         for state_hint, init_T in make_initial_transforms(model, cluster_points, args):
             try:
@@ -1049,6 +1191,7 @@ def fit_cluster_with_meshes(cluster_pcd, models: list[MeshModel], args, table_z=
             axis_report = report_axis_direction(axis_base, state, args)
             origin_base = T[:3, 3].copy()
             center_base = origin_base + T[:3, :3] @ model.bbox_center_local
+            end_pose = mesh_end_pose_fields(model, T, args)
             record = {
                 "model": model,
                 "model_name": model.name,
@@ -1059,6 +1202,10 @@ def fit_cluster_with_meshes(cluster_pcd, models: list[MeshModel], args, table_z=
                 "center_base": center_base,
                 "axis_base": axis_base,
                 "axis_report_base": axis_report,
+                "top_center_base": end_pose["top_center_base"],
+                "bottom_center_base": end_pose["bottom_center_base"],
+                "cup_axis_signed_base": end_pose["cup_axis_signed_base"],
+                "signed_orientation": end_pose["signed_orientation"],
                 "axis_z_abs": abs(float(axis_base[2])),
                 "fitness": float(result.fitness),
                 "inlier_rmse": float(result.inlier_rmse),
@@ -1072,8 +1219,13 @@ def fit_cluster_with_meshes(cluster_pcd, models: list[MeshModel], args, table_z=
                     and (not args.hard_axis_snap or score_details["axis_snap_penalty"] <= 1.0)
                 ),
             }
+            model_best = best_by_model.get(model.name)
+            if model_best is None or record["score"] > model_best["score"]:
+                best_by_model[model.name] = record
             if best is None or record["score"] > best["score"]:
                 best = record
+    if best is not None:
+        best["model_alternatives"] = best_by_model
     return best
 
 
@@ -1131,6 +1283,7 @@ def capture_cluster_pcds(args):
         pcd_crop = crop_pcd_by_workspace(pcd_base_full, workspace)
         pcd_no_table, plane_model, inliers = remove_table_plane(pcd_crop, args)
         pcd_no_table, near_table_removed = remove_near_table_residuals(pcd_no_table, plane_model, args)
+        pcd_no_table, color_removed = filter_dark_object_points(pcd_no_table, args)
 
         candidates, cluster_pcds, dbscan_summary = make_candidates(pcd_no_table, args)
         candidates = sort_candidates(candidates, args.pick_sort)
@@ -1142,6 +1295,7 @@ def capture_cluster_pcds(args):
             "pcd_no_table": pcd_no_table,
             "plane_model": plane_model,
             "near_table_removed": int(near_table_removed),
+            "dark_color_removed": int(color_removed),
             "table_z": table_z,
             "dbscan_summary": dbscan_summary,
             "candidates": candidates,
@@ -1199,6 +1353,7 @@ def load_offline_pcds(args):
                 scene.colors = o3d.utility.Vector3dVector(np.vstack(all_colors))
         if args.voxel_size > 0:
             scene = scene.voxel_down_sample(float(args.voxel_size))
+        scene, color_removed = filter_dark_object_points(scene, args)
 
         candidates, cluster_pcds, dbscan_summary = make_candidates(scene, args)
         candidates = sort_candidates(candidates, args.pick_sort)
@@ -1209,6 +1364,7 @@ def load_offline_pcds(args):
             "pcd_no_table": scene,
             "plane_model": None,
             "near_table_removed": 0,
+            "dark_color_removed": int(color_removed),
             "table_z": table_z,
             "dbscan_summary": dbscan_summary,
             "candidates": candidates,
@@ -1217,11 +1373,14 @@ def load_offline_pcds(args):
 
     candidates = []
     cluster_pcds = {}
+    total_color_removed = 0
     for label, path in enumerate(input_paths):
         raw_pcd = read_point_cloud_compatible(path)
         if raw_pcd.is_empty():
             print(f"Warning: empty point cloud skipped: {path}")
             continue
+        raw_pcd, color_removed = filter_dark_object_points(raw_pcd, args)
+        total_color_removed += int(color_removed)
         raw_points = np.asarray(raw_pcd.points)
         raw_count = int(len(raw_points))
         if raw_count < args.min_raw_points:
@@ -1270,6 +1429,7 @@ def load_offline_pcds(args):
         "pcd_no_table": merged,
         "plane_model": None,
         "near_table_removed": 0,
+        "dark_color_removed": int(total_color_removed),
         "table_z": table_z,
         "dbscan_summary": {
             "total": int(sum(c["clean_points"] for c in candidates)),
@@ -1280,6 +1440,32 @@ def load_offline_pcds(args):
         "candidates": candidates,
         "cluster_pcds": cluster_pcds,
     }
+
+
+def filter_dark_object_points(pcd: o3d.geometry.PointCloud, args):
+    if not args.enable_dark_object_filter:
+        return pcd, 0
+    points = np.asarray(pcd.points)
+    colors = np.asarray(pcd.colors)
+    if len(points) == 0 or colors.shape[0] != points.shape[0]:
+        return pcd, 0
+
+    rgb = np.clip(colors.astype(np.float64), 0.0, 1.0)
+    max_channel = np.max(rgb, axis=1)
+    min_channel = np.min(rgb, axis=1)
+    value = max_channel
+    saturation = np.zeros_like(value)
+    nonzero = value > 1e-9
+    saturation[nonzero] = (max_channel[nonzero] - min_channel[nonzero]) / value[nonzero]
+
+    keep = (value <= float(args.dark_value_max)) & (saturation >= float(args.dark_saturation_min))
+    if args.dark_rgb_max is not None:
+        keep &= np.all(rgb <= float(args.dark_rgb_max), axis=1)
+
+    filtered = o3d.geometry.PointCloud()
+    filtered.points = o3d.utility.Vector3dVector(points[keep])
+    filtered.colors = o3d.utility.Vector3dVector(colors[keep])
+    return filtered, int(np.count_nonzero(~keep))
 
 
 def make_axis_lineset(center: np.ndarray, axis: np.ndarray, length: float, color) -> o3d.geometry.LineSet:
@@ -1302,6 +1488,80 @@ def transform_mesh(mesh: o3d.geometry.TriangleMesh, T: np.ndarray, color=None):
     return out
 
 
+def parse_force_model_set(text: str | None):
+    if not text:
+        return []
+    return [item.strip() for item in text.split(",") if item.strip()]
+
+
+def apply_forced_model_assignment(fit_records: list[dict], required_models: list[str]):
+    if not required_models:
+        return fit_records, None
+    if len(fit_records) < len(required_models):
+        return fit_records, {
+            "enabled": True,
+            "applied": False,
+            "reason": "not_enough_clusters",
+            "required_models": required_models,
+            "cluster_count": len(fit_records),
+        }
+
+    best_assignment = None
+
+    def backtrack(model_idx, used_indices, assigned, total_score):
+        nonlocal best_assignment
+        if model_idx >= len(required_models):
+            if best_assignment is None or total_score > best_assignment["score"]:
+                best_assignment = {
+                    "score": float(total_score),
+                    "assigned": list(assigned),
+                }
+            return
+
+        model_name = required_models[model_idx]
+        for idx, fit in enumerate(fit_records):
+            if idx in used_indices:
+                continue
+            alternative = fit.get("model_alternatives", {}).get(model_name)
+            if alternative is None:
+                continue
+            backtrack(
+                model_idx + 1,
+                used_indices | {idx},
+                assigned + [(idx, model_name, alternative)],
+                total_score + float(alternative["score"]),
+            )
+
+    backtrack(0, set(), [], 0.0)
+    if best_assignment is None:
+        return fit_records, {
+            "enabled": True,
+            "applied": False,
+            "reason": "missing_model_alternatives",
+            "required_models": required_models,
+            "cluster_count": len(fit_records),
+        }
+
+    assigned_indices = {idx for idx, _, _ in best_assignment["assigned"]}
+    assigned_by_index = {idx: alternative for idx, _, alternative in best_assignment["assigned"]}
+    selected = []
+    for idx, fit in enumerate(fit_records):
+        if idx in assigned_indices:
+            forced = dict(assigned_by_index[idx])
+            forced["cluster_pcd"] = fit["cluster_pcd"]
+            forced["forced_model_assignment"] = True
+            selected.append(forced)
+
+    info = {
+        "enabled": True,
+        "applied": True,
+        "required_models": required_models,
+        "selected_labels": [int(fit["label"]) for fit in selected],
+        "assignment_score": best_assignment["score"],
+    }
+    return selected, info
+
+
 def save_outputs(args, ts, capture_info, results):
     args.output_dir.mkdir(parents=True, exist_ok=True)
     metadata_path = args.output_dir / f"{ts}_mesh_pose_results.json"
@@ -1317,6 +1577,7 @@ def save_outputs(args, ts, capture_info, results):
         "mesh_axis": args.mesh_axis,
         "mesh_origin": args.mesh_origin,
         "near_table_removed": capture_info["near_table_removed"],
+        "dark_color_removed": capture_info.get("dark_color_removed", 0),
         "table_z": capture_info.get("table_z"),
         "depth_edge_rejected_pixels": int(np.count_nonzero(capture_info["edge_mask"])),
         "dbscan": capture_info["dbscan_summary"],
@@ -1325,6 +1586,7 @@ def save_outputs(args, ts, capture_info, results):
             "cluster_min_points": args.cluster_min_points,
             "min_raw_points": args.min_raw_points,
             "min_clean_points": args.min_clean_points,
+            "force_model_set": args.force_model_set,
             "icp_max_distance": args.icp_max_distance,
             "icp_iterations": args.icp_iterations,
             "yaw_samples": args.yaw_samples,
@@ -1334,6 +1596,11 @@ def save_outputs(args, ts, capture_info, results):
             "coverage_weight": args.coverage_weight,
             "fitness_weight": args.fitness_weight,
             "extent_weight": args.extent_weight,
+            "observed_size_prior_weight": args.observed_size_prior_weight,
+            "big_observed_diameter_min": args.big_observed_diameter_min,
+            "small_observed_diameter_max": args.small_observed_diameter_max,
+            "big_model_name": args.big_model_name,
+            "small_model_name": args.small_model_name,
             "cup_height_min": args.cup_height_min,
             "cup_height_max": args.cup_height_max,
             "height_prior_weight": args.height_prior_weight,
@@ -1344,6 +1611,10 @@ def save_outputs(args, ts, capture_info, results):
             "upright_axis_z_ideal_min": args.upright_axis_z_ideal_min,
             "lying_axis_z_ideal_max": args.lying_axis_z_ideal_max,
             "hard_axis_snap": args.hard_axis_snap,
+            "dark_object_filter": args.enable_dark_object_filter,
+            "dark_value_max": args.dark_value_max,
+            "dark_saturation_min": args.dark_saturation_min,
+            "dark_rgb_max": args.dark_rgb_max,
             "detect_inverted_upright": args.detect_inverted_upright,
             "upright_rim_prior_weight": args.upright_rim_prior_weight,
             "upright_rim_absolute_weight": args.upright_rim_absolute_weight,
@@ -1405,6 +1676,56 @@ def visualize_results(capture_info, fit_records):
     o3d.visualization.draw_geometries(geometries)
 
 
+def fit_to_json_record(fit: dict):
+    candidate = fit["candidate"]
+    return {
+        "label": int(fit["label"]),
+        "model_name": fit["model_name"],
+        "state_hint": fit["state_hint"],
+        "state": fit["state"],
+        "accepted": fit["accepted"],
+        "forced_model_assignment": bool(fit.get("forced_model_assignment", False)),
+        "score": float(fit["score"]),
+        "fitness": float(fit["fitness"]),
+        "inlier_rmse": float(fit["inlier_rmse"]),
+        "score_details": fit["score_details"],
+        "origin_base": [float(v) for v in fit["origin_base"]],
+        "center_base": [float(v) for v in fit["center_base"]],
+        "axis_base": [float(v) for v in fit["axis_base"]],
+        "axis_report_base": [float(v) for v in fit["axis_report_base"]],
+        "top_center_base": [float(v) for v in fit["top_center_base"]],
+        "bottom_center_base": [float(v) for v in fit["bottom_center_base"]],
+        "cup_axis_signed_base": [float(v) for v in fit["cup_axis_signed_base"]],
+        "signed_orientation": fit["signed_orientation"],
+        "axis_z_abs": float(fit["axis_z_abs"]),
+        "T_base_model": np.asarray(fit["T_base_model"]).tolist(),
+        "raw_points": int(candidate["raw_points"]),
+        "clean_points": int(candidate["clean_points"]),
+        "cluster_center_base": [float(v) for v in candidate["center_base"]],
+        "cluster_extent": [float(v) for v in candidate["extent"]],
+    }
+
+
+def print_forced_assignment(fit_records, assignment_info):
+    if assignment_info is None or not assignment_info.get("enabled"):
+        return
+    print("\nForced model assignment:")
+    if not assignment_info.get("applied"):
+        print(f"  not applied: {assignment_info.get('reason')}")
+        print(f"  required_models={assignment_info.get('required_models')}")
+        print(f"  cluster_count={assignment_info.get('cluster_count')}")
+        return
+    print(f"  required_models={assignment_info['required_models']}")
+    print(f"  assignment_score={assignment_info['assignment_score']:.4f}")
+    for fit in fit_records:
+        center = fit["center_base"]
+        print(
+            f"  label={int(fit['label']):02d}, forced_model={fit['model_name']}, "
+            f"state={fit['state']}, score={fit['score']:.4f}, "
+            f"fitness={fit['fitness']:.4f}, center=[{center[0]:.4f}, {center[1]:.4f}, {center[2]:.4f}]"
+        )
+
+
 def main():
     args = parse_args()
     models = load_mesh_models(args)
@@ -1430,6 +1751,7 @@ def main():
     print(f"  workspace points: {len(capture_info['pcd_crop'].points)}")
     print(f"  no-table points: {len(capture_info['pcd_no_table'].points)}")
     print(f"  near-table removed: {capture_info['near_table_removed']}")
+    print(f"  dark-color removed: {capture_info.get('dark_color_removed', 0)}")
     if capture_info.get("table_z") is not None:
         print(f"  table_z: {capture_info['table_z']:.4f}")
     print(f"  DBSCAN: {capture_info['dbscan_summary']}")
@@ -1448,7 +1770,13 @@ def main():
             print(f"  label={label:02d}: not enough clean points")
             continue
 
+        fit["label"] = label
+        fit["candidate"] = candidate
         fit["cluster_pcd"] = clean_pcd
+        for alternative in fit.get("model_alternatives", {}).values():
+            alternative["label"] = label
+            alternative["candidate"] = candidate
+            alternative["cluster_pcd"] = clean_pcd
         fit_records.append(fit)
 
         center = fit["center_base"]
@@ -1470,8 +1798,16 @@ def main():
             f"    height_penalty={details['height_penalty']:.4f}, "
             f"support_gap={support_gap_text}, support_penalty={details['support_penalty']:.4f}, "
             f"state_extent_penalty={details['state_extent_penalty']:.4f}, "
+            f"observed_size_penalty={details['observed_size_penalty']:.4f}, "
             f"axis_snap_penalty={details['axis_snap_penalty']:.4f}"
         )
+        size_prior = details.get("observed_size_prior")
+        if size_prior is not None:
+            print(
+                f"    observed_size: xy_extent={[round(float(v), 4) for v in size_prior['observed_xy_extent']]}, "
+                f"xy_diameter={size_prior['observed_xy_diameter']:.4f}, "
+                f"reason={size_prior['reason']}"
+            )
         rim = details.get("upright_rim_prior")
         if rim is not None and rim.get("enabled"):
             print(
@@ -1496,6 +1832,17 @@ def main():
             f"axis_report_base=[{axis[0]:.4f}, {axis[1]:.4f}, {axis[2]:.4f}], "
             f"axis_z_abs={fit['axis_z_abs']:.4f}"
         )
+        top = fit["top_center_base"]
+        bottom = fit["bottom_center_base"]
+        signed_axis = fit["cup_axis_signed_base"]
+        print(
+            f"    top_center_base=[{top[0]:.4f}, {top[1]:.4f}, {top[2]:.4f}], "
+            f"bottom_center_base=[{bottom[0]:.4f}, {bottom[1]:.4f}, {bottom[2]:.4f}]"
+        )
+        print(
+            f"    cup_axis_signed_base=[{signed_axis[0]:.4f}, {signed_axis[1]:.4f}, {signed_axis[2]:.4f}], "
+            f"signed_orientation={fit['signed_orientation']}"
+        )
         origin = fit["origin_base"]
         print(f"    origin_base=[{origin[0]:.4f}, {origin[1]:.4f}, {origin[2]:.4f}]")
         print(
@@ -1503,29 +1850,15 @@ def main():
             f"cluster_extent={[round(v, 4) for v in extent]}"
         )
 
-        results_json.append(
-            {
-                "label": label,
-                "model_name": fit["model_name"],
-                "state_hint": fit["state_hint"],
-                "state": fit["state"],
-                "accepted": fit["accepted"],
-                "score": fit["score"],
-                "fitness": fit["fitness"],
-                "inlier_rmse": fit["inlier_rmse"],
-                "score_details": fit["score_details"],
-                "origin_base": [float(v) for v in fit["origin_base"]],
-                "center_base": [float(v) for v in fit["center_base"]],
-                "axis_base": [float(v) for v in fit["axis_base"]],
-                "axis_report_base": [float(v) for v in fit["axis_report_base"]],
-                "axis_z_abs": float(fit["axis_z_abs"]),
-                "T_base_model": np.asarray(fit["T_base_model"]).tolist(),
-                "raw_points": int(candidate["raw_points"]),
-                "clean_points": int(candidate["clean_points"]),
-                "cluster_center_base": [float(v) for v in candidate["center_base"]],
-                "cluster_extent": extent,
-            }
-        )
+        results_json.append(fit_to_json_record(fit))
+
+    required_models = parse_force_model_set(args.force_model_set)
+    assignment_info = None
+    if required_models:
+        fit_records, assignment_info = apply_forced_model_assignment(fit_records, required_models)
+        print_forced_assignment(fit_records, assignment_info)
+        if assignment_info and assignment_info.get("applied"):
+            results_json = [fit_to_json_record(fit) for fit in fit_records]
 
     ts = time.strftime("%Y%m%d_%H%M%S")
     save_outputs(args, ts, capture_info, results_json)

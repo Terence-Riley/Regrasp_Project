@@ -97,6 +97,13 @@ def solve_pink_ik(args, current_joints_deg=None):
             if not args.no_wrap_current_joints:
                 current_joints_deg = wrap_degrees_180(current_joints_deg)
             q0 = set_arm_joints_deg(model, q0, current_joints_deg)
+            if getattr(args, "clamp_current_to_limits", False):
+                q0 = clamp_configuration_to_limits(
+                    model,
+                    q0,
+                    margin_rad=float(getattr(args, "limit_margin_rad", 1e-4)),
+                    verbose=True,
+                )
 
         configuration = pink.Configuration(model, data, q0)
         current_pose = configuration.get_transform_frame_to_world(args.frame)
@@ -108,7 +115,9 @@ def solve_pink_ik(args, current_joints_deg=None):
             target_translation = np.asarray(args.target_position, dtype=np.float64)
 
         target_rotation = np.array(current_pose.rotation, dtype=np.float64)
-        if args.target_rpy_deg is not None:
+        if getattr(args, "target_rotation_matrix", None) is not None:
+            target_rotation = np.asarray(args.target_rotation_matrix, dtype=np.float64).reshape(3, 3)
+        elif args.target_rpy_deg is not None:
             target_rotation = rpy_deg_to_matrix(pin, args.target_rpy_deg)
 
         target_pose = pin.SE3(target_rotation, target_translation)
@@ -138,8 +147,14 @@ def solve_pink_ik(args, current_joints_deg=None):
         print("  " + ", ".join(f"{v:.3f}" for v in get_arm_joints_deg(model, q0)))
         print("\nCurrent frame position:")
         print("  " + ", ".join(f"{v:.5f}" for v in current_pose.translation))
+        current_rpy_deg = matrix_to_rpy_deg(pin, current_pose.rotation)
+        print("Current frame RPY [deg]:")
+        print("  " + ", ".join(f"{v:.3f}" for v in current_rpy_deg))
         print("Target frame position:")
         print("  " + ", ".join(f"{v:.5f}" for v in target_pose.translation))
+        target_rpy_deg = matrix_to_rpy_deg(pin, target_pose.rotation)
+        print("Target frame RPY [deg]:")
+        print("  " + ", ".join(f"{v:.3f}" for v in target_rpy_deg))
 
         converged = False
         iteration = 0
@@ -155,6 +170,7 @@ def solve_pink_ik(args, current_joints_deg=None):
         q_sol = np.array(configuration.q, dtype=np.float64)
         final_pose = configuration.get_transform_frame_to_world(args.frame)
         pos_error, orient_error = pose_errors(pin, final_pose, target_pose)
+        final_rpy_deg = matrix_to_rpy_deg(pin, final_pose.rotation)
         arm_start_deg = get_arm_joints_deg(model, q0)
         arm_sol_deg = get_arm_joints_deg(model, q_sol)
         delta_deg = np.asarray(arm_sol_deg) - np.asarray(arm_start_deg)
@@ -164,6 +180,7 @@ def solve_pink_ik(args, current_joints_deg=None):
         print(f"  iterations: {iteration}")
         print(f"  position_error_m: {pos_error:.6f}")
         print(f"  orientation_error_rad: {orient_error:.6f}")
+        print("  final_frame_rpy_deg: " + ", ".join(f"{v:.3f}" for v in final_rpy_deg))
         print("\nSolved six arm joints [deg], Kortex order joint_1..joint_6:")
         print("  " + ", ".join(f"{v:.3f}" for v in arm_sol_deg))
         print("Joint deltas from start [deg]:")
@@ -209,6 +226,17 @@ def parse_args():
         "--no-wrap-current-joints",
         action="store_true",
         help="Do not wrap --current-joints-deg from Kortex 0..360 style to [-180, 180].",
+    )
+    parser.add_argument(
+        "--clamp-current-to-limits",
+        action="store_true",
+        help="Clamp the initial joint seed inside URDF limits. Useful when Kortex reports a joint a tiny bit outside URDF limits.",
+    )
+    parser.add_argument(
+        "--limit-margin-rad",
+        type=float,
+        default=1e-4,
+        help="Small margin used by --clamp-current-to-limits.",
     )
     parser.add_argument(
         "--target-offset",
@@ -310,9 +338,41 @@ def get_arm_joints_deg(model, q):
     return values
 
 
+def clamp_configuration_to_limits(model, q, margin_rad=1e-4, verbose=False):
+    clipped = np.array(q, dtype=np.float64).copy()
+    lower = np.asarray(model.lowerPositionLimit, dtype=np.float64)
+    upper = np.asarray(model.upperPositionLimit, dtype=np.float64)
+    changes = []
+    for idx in range(model.nq):
+        lo = float(lower[idx])
+        hi = float(upper[idx])
+        if not np.isfinite(lo) or not np.isfinite(hi) or lo >= hi:
+            continue
+        safe_lo = lo + float(margin_rad)
+        safe_hi = hi - float(margin_rad)
+        before = float(clipped[idx])
+        after = min(max(before, safe_lo), safe_hi)
+        if abs(after - before) > 1e-12:
+            clipped[idx] = after
+            changes.append((idx, before, after, lo, hi))
+
+    if verbose and changes:
+        print("\nClamped initial q to URDF limits:")
+        for idx, before, after, lo, hi in changes:
+            print(
+                f"  q[{idx}]: {math.degrees(before):.3f} deg -> {math.degrees(after):.3f} deg "
+                f"(limit {math.degrees(lo):.3f}..{math.degrees(hi):.3f} deg)"
+            )
+    return clipped
+
+
 def rpy_deg_to_matrix(pin, rpy_deg):
     rpy_rad = np.radians(np.asarray(rpy_deg, dtype=np.float64))
     return pin.rpy.rpyToMatrix(float(rpy_rad[0]), float(rpy_rad[1]), float(rpy_rad[2]))
+
+
+def matrix_to_rpy_deg(pin, rotation):
+    return np.degrees(pin.rpy.matrixToRpy(np.asarray(rotation, dtype=np.float64)))
 
 
 def pose_errors(pin, current, target):

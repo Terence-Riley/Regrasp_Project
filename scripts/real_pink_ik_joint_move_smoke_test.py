@@ -22,13 +22,13 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from control.kortex_controller import KortexController  # noqa: E402
-from scripts.real_move_above_cup_test import load_robot_config  # noqa: E402
 from scripts.test_pink_ik_gen3_lite import solve_pink_ik  # noqa: E402
 
 
@@ -116,6 +116,19 @@ def parse_args():
 
 def joint_values_deg(joint_angles):
     return [float(j.value) for j in joint_angles.joint_angles]
+
+
+def load_robot_config(path: Path):
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Missing robot config: {path}\n"
+            "Copy configs/robot_config.example.yaml to configs/robot_config.yaml and edit it."
+        )
+    with open(path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    if "kortex" not in data:
+        raise KeyError(f"{path} must contain a 'kortex' section.")
+    return data
 
 
 def shortest_delta_deg(target, current):

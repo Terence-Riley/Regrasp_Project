@@ -241,6 +241,37 @@ python .\scripts\real_pink_ik_joint_move_smoke_test.py `
   --duration 10
 ```
 
+### `real_pink_absolute_position_smoke_test.py`
+
+Read only by default; moves robot only with `--execute` / 默认只读与解 IK；只有加 `--execute` 才会移动真机。
+Reads current Kortex joints, solves Pink IK for an absolute `tool_frame` target position, and can optionally execute the joint trajectory after typing `MOVEABS`.
+
+读取当前 Kortex 关节角，对指定的绝对 `tool_frame` 目标位置求 Pink IK；如加 `--execute`，输入 `MOVEABS` 后执行 Kortex 关节轨迹。
+```powershell
+python .\scripts\real_pink_absolute_position_smoke_test.py `
+  --target-position 0.45 0.17 0.43 `
+  --target-rpy-deg 180 0 0 `
+  --orientation-cost 4.0
+```
+
+### `real_pink_pick_one_cup_smoke_test.py`
+
+Moves robot and gripper / 会移动真机和夹爪。
+Detects one cup with RealSense + mesh fitting, uses the mesh center `x/y/z` as the grasp point, fixes the tool orientation to vertical-down, then executes `open -> pre-grasp -> grasp -> close -> lift`.
+
+使用 RealSense + mesh 匹配检测一个杯子，以 mesh center 的 `x/y/z` 作为抓取点，固定工具姿态为竖直向下，然后执行 `open -> pre-grasp -> grasp -> close -> lift`。
+```powershell
+python .\scripts\real_pink_pick_one_cup_smoke_test.py `
+  --mesh big=.\mesh\bigcup.STL `
+  --mesh small=.\mesh\smallcup.STL `
+  --mesh-unit m `
+  --mesh-axis y `
+  --mesh-origin bbox_center `
+  --workspace-name pickup `
+  --enable-dark-object-filter `
+  --tool-rpy-deg 180 0 0
+```
+
 ## Legacy Scripts / 历史脚本
 
 ### `scripts/legacy_capture/`
@@ -260,4 +291,3 @@ Early simulation, dynamic calibration, and PyBullet pick-place scripts.
 Kortex API experiments and smoke tests.
 
 Kortex API 实验和 smoke test 脚本。
-

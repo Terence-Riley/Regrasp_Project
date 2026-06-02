@@ -7,3 +7,6 @@ pyrealsense2
 qpsolvers
 osqp
 pin-pink
+viser
+yourdfpy
+trimesh
