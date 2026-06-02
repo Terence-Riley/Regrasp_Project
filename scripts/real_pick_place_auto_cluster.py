@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Real automatic pick-place with point-cloud cup-center detection.
 
+中文说明：早期自动 cluster 检测版本 pick-place 脚本。它用 RealSense 点云、
+桌面去除和 DBSCAN 自动找杯子中心，然后执行抓取和放置。该脚本会移动真实
+机械臂和夹爪。
+
 This script is based on the working real_pick_place_auto.py pipeline, but replaces
 manual clicking with an automatic RGB-D point-cloud detector:
 

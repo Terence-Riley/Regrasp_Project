@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """First real pick / lift test for Kinova Gen3 lite.
 
+中文说明：早期保守真机抓取测试脚本，主要完成“打开夹爪 -> 到杯子上方
+-> 下降 -> 闭合夹爪 -> 抬起”。默认不执行放置动作。该脚本会移动机械臂
+和夹爪，运行前必须确认工作空间安全。
+
 This is the first conservative real-robot pick-place script.
 Default behavior is intentionally only PICK + LIFT:
 

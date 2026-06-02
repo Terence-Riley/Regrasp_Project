@@ -19,6 +19,8 @@ control/
 perception/
 utils/
 scripts/
+scripts/legacy_capture/
+scripts/legacy_simulation/
 configs/robot_config.example.yaml
 configs/real_calibration.yaml        # if it is a shared lab calibration / 如果这是固定实验室标定
 kortex_description/
@@ -160,15 +162,27 @@ Generated data and debug outputs. Do not stage by default.
 
 生成数据和调试输出，默认不提交。
 
+### `scripts/legacy_capture/`
+
+Early RealSense/ArUco capture scripts moved out of the repository root.
+
+从仓库根目录移出的早期 RealSense/ArUco 采集脚本。
+
+### `scripts/legacy_simulation/`
+
+Early PyBullet simulation, dynamic calibration, and simulated pick-place scripts moved out of the repository root.
+
+从仓库根目录移出的早期 PyBullet 仿真、动态标定和仿真 pick-place 脚本。
+
 ### `reference/`
 
 Research papers, prior project code, and external references. Useful during development but not required for running the current scripts.
 
 论文、历史项目代码和外部参考。开发时有用，但当前脚本运行不依赖它们。
 
-For a cleaner public GitHub repository, consider moving this directory to a separate `references` branch, Git LFS, or excluding large PDFs.
+This directory is ignored by `.gitignore` because it contains external papers and reference projects that are not required to run the current code.
 
-如果要做更干净的公开 GitHub 仓库，可考虑把该目录移到单独分支、Git LFS，或不提交大型 PDF。
+该目录已经加入 `.gitignore`，因为里面主要是外部论文和参考项目，当前代码运行不依赖它们。
 
 ## Suggested GitHub Cleanup / 标准 GitHub 仓库整理建议
 
@@ -209,4 +223,3 @@ Regrasp_Project/
 Do not restructure immediately before committing if the scripts are working. First commit the current working state, then reorganize in a separate cleanup commit.
 
 如果当前脚本能运行，不建议在提交前立刻大规模移动文件。先提交当前可工作版本，再用单独 cleanup commit 整理结构。
-

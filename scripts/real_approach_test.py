@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Real approach test.
 
+中文说明：真实机械臂接近动作测试脚本。它会点击/估计目标点，移动到目标上方，
+再下降到 approach 高度，不闭合夹爪，然后抬回 pre-grasp。该脚本会移动真机。
+
 This script reuses the proven perception + official Kortex IK/joint-action path:
 1. Click object center and estimate T_base_object.
 2. Move to pre-grasp above the object.

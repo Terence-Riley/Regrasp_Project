@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Fully automatic workspace regrasp entry point.
 
+中文说明：全自动真实重抓取入口，会把参数转发给 `real_regrasp_workspaces.py`
+并自动添加 `--auto --yes`。该脚本会移动真实机械臂，只有在手动确认版本稳定后使用。
+
 This script forwards to scripts/real_regrasp_workspaces.py with:
     --auto --yes
 

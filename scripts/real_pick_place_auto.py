@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """First real automatic pick-place test for Kinova Gen3 lite.
 
+中文说明：早期自动 pick-place 真机脚本，在点击杯子中心后执行抓取和固定位置放置。
+该脚本会移动机械臂和夹爪。当前主流程更推荐使用工作区校准和 regrasp 脚本。
+
 This script extends the working real_pick_place_test.py from PICK + LIFT to
 PICK + PLACE:
 

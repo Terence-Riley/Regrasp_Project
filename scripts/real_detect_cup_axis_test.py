@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Detect cup/object principal axes inside the calibrated table workspace.
 
+中文说明：在校准好的桌面区域内检测杯子或物体点云 cluster，并用 PCA 估计主轴。
+该脚本只做感知，不移动 Kinova 机械臂。
+
 This script is perception-only and does not move the Kinova arm.
 
 Pipeline:

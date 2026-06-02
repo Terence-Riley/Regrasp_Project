@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Real gripper test for Kinova Gen3 lite.
 
+中文说明：Kinova Gen3 Lite 夹爪测试脚本，用于读取、打开、关闭或执行
+open-close-open 序列。该脚本会控制真实夹爪，但不会移动机械臂本体。
+
 This script follows the official Kortex API style used by the current project:
 - add third_party/.../api_python/examples to sys.path
 - use utilities.DeviceConnection.createTcpConnection(args)

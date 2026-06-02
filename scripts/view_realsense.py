@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Display RealSense color and aligned depth frames.
 
+中文说明：显示 RealSense D435i 当前彩色画面和对齐后的深度画面，用于快速查看
+相机现在拍到了什么。该脚本只读相机，不移动机器人。
+
 This script does not move the robot. It is intended for a quick visual check of
 what the D435i currently sees.
 """

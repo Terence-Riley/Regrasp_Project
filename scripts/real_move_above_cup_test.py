@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Real move-above-cup test using Kinova's official Kortex example style.
 
+中文说明：早期真机测试脚本，用 RealSense/ArUco 估计杯子位置，并尝试把
+Kinova 末端移动到杯子上方。该脚本会移动真实机械臂，但不会下降或控制夹爪。
+
 Pipeline:
 1. RealSense + ArUco perception estimates T_base_object.
 2. Generate pre_grasp_pos = cup_pos + [0, 0, move_above_height].

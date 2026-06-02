@@ -27,3 +27,6 @@ sim_pick_place_outputs/
 
 # Local binary packages / 本地二进制安装包
 *.whl
+
+# External papers and reference projects / 外部论文和参考项目
+reference/

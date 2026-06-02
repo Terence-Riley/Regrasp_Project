@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """RealSense + ArUco point-cloud cup-state detection test.
 
+中文说明：早期杯子状态检测脚本，使用 RealSense 点云、ArUco 动态标定、
+桌面去除、DBSCAN 和 PCA/几何规则判断 upright/lying/unknown。该脚本只做感知。
+
 This script is perception-only and does not move the Kinova arm.
 
 Pipeline:

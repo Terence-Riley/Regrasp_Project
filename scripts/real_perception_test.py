@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Real perception smoke test.
 
+中文说明：真实 RealSense/ArUco 感知 smoke test，用于验证动态标定公式和
+物体点从相机坐标系转换到 Kinova base 坐标系。该脚本不移动机器人。
+
 This script does not move the robot.
 
 It estimates:

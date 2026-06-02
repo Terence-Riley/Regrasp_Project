@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Calibrate a table workspace polygon from four clicked RealSense pixels.
 
+中文说明：通过点击 RealSense 画面中的桌面四角，校准桌面工作区多边形。
+脚本使用对齐深度和 ArUco 位姿把点击点转换到 Kinova base 坐标系，不移动机器人。
+
 This script is perception-only and does not move the robot.
 
 Click the four table corners in clockwise or counter-clockwise order. The script

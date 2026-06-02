@@ -177,6 +177,7 @@ This script requires typing `MOVE` before execution.
 ## Repository Guide / 文件说明
 
 See [docs/FILE_GUIDE.md](docs/FILE_GUIDE.md) for file purpose, staging recommendations, and suggested GitHub cleanup.
+See [docs/SCRIPTS.md](docs/SCRIPTS.md) for detailed script usage and safety labels.
 
 文件用途、建议提交内容和仓库整理建议见 [docs/FILE_GUIDE.md](docs/FILE_GUIDE.md)。
-
+详细脚本用途和安全标签见 [docs/SCRIPTS.md](docs/SCRIPTS.md)。
